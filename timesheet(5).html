@@ -1,0 +1,2310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Timesheet</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+:root {
+  --bg: #f5f4f0;
+  --surface: #ffffff;
+  --surface2: #f0efe9;
+  --border: #e0ddd5;
+  --border2: #ccc9bf;
+  --text: #1a1917;
+  --text2: #6b6760;
+  --text3: #a09d96;
+  --accent: #2d5a3d;
+  --accent-light: #e8f0ea;
+  --accent2: #c17f3a;
+  --accent2-light: #fdf3e7;
+  --danger: #b83232;
+  --danger-light: #fdf0f0;
+  --amber: #b87a20;
+  --amber-light: #fef8ee;
+  --info: #2a4d7a;
+  --info-light: #edf2f9;
+  --radius: 6px;
+  --radius-lg: 10px;
+  --font: 'DM Sans', sans-serif;
+  --mono: 'DM Mono', monospace;
+  --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+/* LAYOUT */
+#app { display: flex; min-height: 100vh; }
+
+#sidebar {
+  width: 220px;
+  min-height: 100vh;
+  background: var(--text);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 100;
+  transition: transform 0.2s;
+}
+
+#sidebar .logo {
+  padding: 24px 20px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+#sidebar .logo h1 {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #fff;
+}
+#sidebar .logo span {
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+  font-family: var(--mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+#sidebar nav { flex: 1; padding: 12px 0; overflow-y: auto; }
+
+#sidebar nav a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 20px;
+  color: rgba(255,255,255,0.6);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: all 0.15s;
+  border-left: 2px solid transparent;
+}
+#sidebar nav a:hover { color: #fff; background: rgba(255,255,255,0.05); }
+#sidebar nav a.active { color: #fff; border-left-color: #7bc89a; background: rgba(255,255,255,0.07); }
+#sidebar nav a svg { flex-shrink: 0; opacity: 0.7; }
+#sidebar nav a.active svg { opacity: 1; }
+
+#sidebar .nav-section {
+  padding: 16px 20px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.25);
+  font-family: var(--mono);
+}
+
+#sidebar .user-area {
+  padding: 16px 20px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+#sidebar .user-area .user-name { font-size: 13px; color: #fff; font-weight: 500; }
+#sidebar .user-area .user-role {
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+#main {
+  flex: 1;
+  margin-left: 220px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+#topbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 32px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+#topbar .page-title { font-size: 15px; font-weight: 600; }
+#topbar .topbar-right { display: flex; align-items: center; gap: 12px; }
+
+#content { padding: 32px; flex: 1; max-width: 1100px; }
+
+/* IMPERSONATION BANNER */
+#impersonate-banner {
+  background: #7c3f0a;
+  color: #fff;
+  padding: 10px 32px;
+  display: none;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+#impersonate-banner.visible { display: flex; }
+#impersonate-banner strong { font-weight: 600; }
+#impersonate-banner button {
+  margin-left: auto;
+  background: rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.3);
+  color: #fff;
+  padding: 4px 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+/* CARDS & SURFACES */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+.card-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.card-header h2 { font-size: 14px; font-weight: 600; }
+.card-body { padding: 24px; }
+
+/* STATS GRID */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+}
+.stat-card .label { font-size: 11px; color: var(--text3); font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 6px; }
+.stat-card .value { font-size: 26px; font-weight: 300; font-family: var(--mono); color: var(--text); }
+.stat-card .sub { font-size: 12px; color: var(--text2); margin-top: 2px; }
+
+/* TABLES */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th {
+  text-align: left;
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text2);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--surface2);
+}
+td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--surface2); }
+.tr-total td { background: var(--surface2); font-weight: 600; }
+
+/* BADGES */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: var(--mono);
+  letter-spacing: 0.03em;
+}
+.badge-billable { background: var(--accent-light); color: var(--accent); }
+.badge-nonbillable { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
+.badge-draft { background: var(--surface2); color: var(--text2); border: 1px solid var(--border2); }
+.badge-submitted { background: var(--info-light); color: var(--info); }
+.badge-approved { background: var(--accent-light); color: var(--accent); }
+.badge-rejected { background: var(--danger-light); color: var(--danger); }
+.badge-membersigned { background: #eef6ff; color: #1a5fa8; }
+.badge-fullysigned { background: #e8f7f0; color: #1a6b45; border: 1px solid #b3ddc7; }
+.badge-reopened { background: var(--amber-light); color: var(--amber); }
+.badge-active { background: var(--accent-light); color: var(--accent); }
+.badge-inactive { background: var(--surface2); color: var(--text3); }
+.badge-admin { background: #f0eeff; color: #4a2db5; }
+.badge-manager { background: var(--info-light); color: var(--info); }
+.badge-member { background: var(--surface2); color: var(--text2); }
+
+/* FORMS */
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+.form-group { display: flex; flex-direction: column; gap: 5px; }
+.form-group label { font-size: 12px; font-weight: 500; color: var(--text2); }
+.form-group input,
+.form-group select,
+.form-group textarea {
+  padding: 8px 11px;
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  transition: border-color 0.15s, box-shadow 0.15s;
+  outline: none;
+}
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(45,90,61,0.1);
+}
+.form-group textarea { resize: vertical; min-height: 70px; }
+.form-row { display: flex; gap: 16px; flex-wrap: wrap; }
+.form-row .form-group { flex: 1; min-width: 160px; }
+.form-actions { display: flex; gap: 10px; align-items: center; margin-top: 20px; flex-wrap: wrap; }
+
+/* BUTTONS */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-primary:hover { background: #224a31; }
+.btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border2); }
+.btn-secondary:hover { background: var(--surface2); }
+.btn-danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+.btn-danger:hover { background: #9a2a2a; }
+.btn-amber { background: var(--amber); color: #fff; border-color: var(--amber); }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-icon { padding: 6px; border-radius: var(--radius); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ALERTS */
+.alert {
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.alert-amber { background: var(--amber-light); color: #7a5010; border: 1px solid #f0c070; }
+.alert-danger { background: var(--danger-light); color: #8a2020; border: 1px solid #f0b0b0; }
+.alert-success { background: var(--accent-light); color: #1a4a2a; border: 1px solid #a8d4b5; }
+.alert-info { background: var(--info-light); color: #1a3a6a; border: 1px solid #aac0dd; }
+
+/* MODAL */
+#modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+#modal-overlay.open { display: flex; }
+.modal {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  max-width: 560px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.modal-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modal-header h3 { font-size: 15px; font-weight: 600; }
+.modal-body { padding: 24px; }
+.modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; }
+
+/* SIGNATURE PAD */
+#sig-canvas {
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  cursor: crosshair;
+  display: block;
+  background: #fafaf8;
+  touch-action: none;
+}
+
+/* LOADING */
+#loading-screen {
+  position: fixed; inset: 0;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  gap: 16px;
+}
+.spinner {
+  width: 36px; height: 36px;
+  border: 2px solid var(--border2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* MISC */
+.page { display: none; }
+.page.active { display: block; }
+.section-title { font-size: 13px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.06em; font-family: var(--mono); margin-bottom: 12px; }
+.empty-state { text-align: center; padding: 48px 24px; color: var(--text3); }
+.empty-state p { margin-top: 8px; font-size: 13px; }
+hr.divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+.text-right { text-align: right; }
+.text-mono { font-family: var(--mono); }
+.gap-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.mb-16 { margin-bottom: 16px; }
+.mb-24 { margin-bottom: 24px; }
+
+/* TIMESHEET ENTRY TABLE */
+.entry-day-group { margin-bottom: 20px; }
+.entry-day-label {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 6px 0 6px 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.entry-day-total { font-weight: 600; color: var(--text); }
+.entry-day-warning { color: var(--amber); font-weight: 600; }
+
+/* MOBILE SIDEBAR TOGGLE */
+#sidebar-toggle { display: none; }
+
+@media (max-width: 768px) {
+  #sidebar { transform: translateX(-100%); }
+  #sidebar.open { transform: translateX(0); }
+  #main { margin-left: 0; }
+  #content { padding: 20px 16px; }
+  #sidebar-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px; height: 36px;
+    background: none;
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    cursor: pointer;
+    color: var(--text);
+  }
+  #topbar { padding: 0 16px; }
+  .form-grid { grid-template-columns: 1fr; }
+}
+
+/* ORG NAME input in topbar */
+#org-name-display {
+  font-size: 13px;
+  color: var(--text2);
+  font-family: var(--mono);
+}
+
+/* Canvas signature clear button */
+.sig-wrap { position: relative; }
+.sig-clear {
+  position: absolute;
+  top: 6px; right: 6px;
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+/* Timesheet status pill in header */
+.ts-status-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* History month selector */
+.month-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 20px; }
+.month-tab {
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border2);
+  font-size: 12px;
+  cursor: pointer;
+  font-family: var(--mono);
+  background: var(--surface);
+  transition: all 0.15s;
+}
+.month-tab:hover { border-color: var(--accent); color: var(--accent); }
+.month-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.month-tab .ts-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+</style>
+</head>
+<body>
+
+<div id="loading-screen">
+  <div class="spinner"></div>
+  <div style="font-size:13px;color:var(--text2);">Loading timesheet…</div>
+</div>
+
+<div id="modal-overlay">
+  <div class="modal" id="modal-box">
+    <div class="modal-header">
+      <h3 id="modal-title">Modal</h3>
+      <button class="btn btn-secondary btn-sm" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none;">
+  <div id="sidebar">
+    <div class="logo">
+      <h1 id="org-name-display">Timesheet</h1>
+      <span id="sidebar-role-label">—</span>
+    </div>
+    <nav id="sidebar-nav"></nav>
+    <div class="user-area">
+      <div class="user-name" id="sidebar-username">—</div>
+      <div class="user-role" id="sidebar-userrole">—</div>
+    </div>
+  </div>
+
+  <div id="main">
+    <div id="impersonate-banner">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <span>Acting as <strong id="impersonate-name">—</strong> — all actions are logged on your behalf</span>
+      <button onclick="exitImpersonation()">Exit impersonation</button>
+    </div>
+
+    <div id="topbar">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button id="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <span class="page-title" id="topbar-title">Dashboard</span>
+      </div>
+      <div class="topbar-right">
+        <span style="font-size:12px;color:var(--text3);font-family:var(--mono);" id="topbar-date"></span>
+      </div>
+    </div>
+
+    <div id="content">
+      <!-- Pages rendered here by JS -->
+      <div id="page-dashboard" class="page"></div>
+      <div id="page-log" class="page"></div>
+      <div id="page-mytimesheets" class="page"></div>
+      <div id="page-history" class="page"></div>
+      <div id="page-approvals" class="page"></div>
+      <div id="page-teamoverview" class="page"></div>
+      <div id="page-projects" class="page"></div>
+      <div id="page-tasks" class="page"></div>
+      <div id="page-users" class="page"></div>
+      <div id="page-alltimesheets" class="page"></div>
+      <div id="page-auditlog" class="page"></div>
+      <div id="page-settings" class="page"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CONFIGURATION — update ORG_NAME and SP_SITE_URL after deploy
+// ============================================================
+const CONFIG = {
+  ORG_NAME: 'Gaia X Hub Spain',
+  SP_SITE_URL: 'https://gaiaxes.sharepoint.com/sites/AsociacinGAIA-XEspaa',
+  DATA_LIB: 'TimeSheets',
+  PDF_FOLDER: 'TimeSheets/PDFs',
+  // Set to true to use mock data (for local testing outside SharePoint)
+  DEMO_MODE: !window.location.hostname.includes('sharepoint.com') && !window.location.hostname.includes('.sharepoint.')
+};
+
+// ============================================================
+// STATE
+// ============================================================
+const STATE = {
+  currentUser: null,       // user record from users.json
+  spUser: null,            // raw SharePoint currentUser
+  impersonating: null,     // user record being impersonated
+  formDigest: null,
+  data: {
+    users: [],
+    projects: [],
+    tasks: [],
+    assignments: [],
+    timesheets: [],
+    entries: [],
+    auditlog: []
+  },
+  currentPage: null
+};
+
+// ============================================================
+// ICONS (inline SVG helpers)
+// ============================================================
+const ico = (name, size=16) => {
+  const paths = {
+    home: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+    clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    check: '<polyline points="20 6 9 17 4 12"/>',
+    x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+    users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    folder: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+    list: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
+    shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+    log: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+    settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+    edit: '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>',
+    trash: '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
+    plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+    pdf: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
+    lock: '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+    unlock: '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>',
+    user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    alert: '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+    impersonate: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 11l-4 4-4-4"/>',
+    calendar: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+    refresh: '<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>',
+  };
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths[name]||''}</svg>`;
+};
+
+// ============================================================
+// SHAREPOINT REST API
+// ============================================================
+const SP = {
+  base() { return CONFIG.SP_SITE_URL + '/_api'; },
+
+  async getFormDigest() {
+    if (STATE.formDigest) return STATE.formDigest;
+    const r = await fetch(`${this.base()}/contextinfo`, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json;odata=verbose', 'Content-Type': 'application/json;odata=verbose' },
+      credentials: 'include'
+    });
+    const d = await r.json();
+    STATE.formDigest = d.d.GetContextWebInformation.FormDigestValue;
+    // Refresh every 25 minutes
+    setTimeout(() => { STATE.formDigest = null; }, 25 * 60 * 1000);
+    return STATE.formDigest;
+  },
+
+  async getCurrentUser() {
+    const r = await fetch(`${this.base()}/web/currentUser`, {
+      headers: { 'Accept': 'application/json;odata=verbose' },
+      credentials: 'include'
+    });
+    const d = await r.json();
+    return d.d;
+  },
+
+  filePath(filename) {
+    return `/sites/AsociacinGAIA-XEspaa/${CONFIG.DATA_LIB}/${filename}`;
+  },
+
+  async readJSON(filename) {
+    const url = `${this.base()}/web/GetFileByServerRelativeUrl('${this.filePath(filename)}')/$value`;
+    const r = await fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'include' });
+    if (!r.ok) throw new Error(`Cannot read ${filename}: ${r.status}`);
+    return r.json();
+  },
+
+  async readJSONWithETag(filename) {
+    // Get ETag from file properties
+    const metaUrl = `${this.base()}/web/GetFileByServerRelativeUrl('${this.filePath(filename)}')`;
+    const metaR = await fetch(metaUrl, { headers: { 'Accept': 'application/json;odata=verbose' }, credentials: 'include' });
+    const meta = await metaR.json();
+    const etag = meta.d ? meta.d.__metadata.etag : null;
+    const data = await this.readJSON(filename);
+    return { data, etag };
+  },
+
+  async writeJSON(filename, data, etag) {
+    const digest = await this.getFormDigest();
+    const url = `${this.base()}/web/GetFileByServerRelativeUrl('${this.filePath(filename)}')/$value`;
+    const headers = {
+      'Accept': 'application/json;odata=verbose',
+      'Content-Type': 'application/json',
+      'X-RequestDigest': digest,
+      'X-HTTP-Method': 'PUT'
+    };
+    if (etag) headers['If-Match'] = etag;
+    const r = await fetch(url, {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: JSON.stringify(data, null, 2)
+    });
+    if (r.status === 412) throw new Error('CONFLICT: Data changed by another user. Please refresh.');
+    if (!r.ok) throw new Error(`Write failed (${r.status})`);
+    return true;
+  },
+
+  async ensureFile(filename, defaultData) {
+    try {
+      await this.readJSON(filename);
+    } catch {
+      // File doesn't exist — create it
+      await this.uploadNewFile(filename, defaultData);
+    }
+  },
+
+  async uploadNewFile(filename, data) {
+    const digest = await this.getFormDigest();
+    const url = `${this.base()}/web/GetFolderByServerRelativeUrl('/sites/AsociacinGAIA-XEspaa/${CONFIG.DATA_LIB}')/Files/add(url='${filename}',overwrite=false)`;
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json;odata=verbose', 'X-RequestDigest': digest },
+      credentials: 'include',
+      body: JSON.stringify(data, null, 2)
+    });
+  },
+
+  async uploadPDF(filename, pdfBlob) {
+    const digest = await this.getFormDigest();
+    const url = `${this.base()}/web/GetFolderByServerRelativeUrl('/sites/AsociacinGAIA-XEspaa/${CONFIG.PDF_FOLDER}')/Files/add(url='${filename}',overwrite=true)`;
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json;odata=verbose', 'X-RequestDigest': digest },
+      credentials: 'include',
+      body: pdfBlob
+    });
+    if (!r.ok) throw new Error(`PDF upload failed (${r.status})`);
+    return `/sites/AsociacinGAIA-XEspaa/${CONFIG.PDF_FOLDER}/${filename}`;
+  }
+};
+
+// ============================================================
+// DEMO MODE — mock SharePoint calls
+// ============================================================
+const DEMO_DATA = {
+  users: [
+    { userID: 'u1', displayName: 'Admin User', email: 'admin@example.com', role: 'admin', managerID: '', status: 'active' },
+    { userID: 'u2', displayName: 'Alice Smith', email: 'alice@example.com', role: 'member', managerID: 'u4', status: 'active' },
+    { userID: 'u3', displayName: 'Bob Jones', email: 'bob@example.com', role: 'member', managerID: 'u4', status: 'active' },
+    { userID: 'u4', displayName: 'Carol Manager', email: 'carol@example.com', role: 'manager', managerID: '', status: 'active' },
+    { userID: 'u5', displayName: 'Former Employee', email: 'former@example.com', role: 'member', managerID: 'u4', status: 'inactive' }
+  ],
+  projects: [
+    { projectID: 'p1', name: 'Client Alpha Website', description: 'Full website redesign', billable: true, status: 'active', startDate: '2025-01-01', endDate: '2025-12-31' },
+    { projectID: 'p2', name: 'Internal IT Setup', description: 'Office infrastructure', billable: false, status: 'active', startDate: '2025-01-01', endDate: '2025-06-30' },
+    { projectID: 'p3', name: 'Client Beta App', description: 'Mobile application', billable: true, status: 'active', startDate: '2025-03-01', endDate: '2025-12-31' }
+  ],
+  tasks: [
+    { taskID: 't1', projectID: 'p1', name: 'Design', description: 'UI/UX design work', status: 'active' },
+    { taskID: 't2', projectID: 'p1', name: 'Development', description: 'Frontend coding', status: 'active' },
+    { taskID: 't3', projectID: 'p1', name: 'Testing', description: 'QA and testing', status: 'active' },
+    { taskID: 't4', projectID: 'p2', name: 'Setup & Config', description: 'Hardware setup', status: 'active' },
+    { taskID: 't5', projectID: 'p2', name: 'Documentation', description: 'Write IT docs', status: 'active' },
+    { taskID: 't6', projectID: 'p3', name: 'Backend API', description: 'API development', status: 'active' },
+    { taskID: 't7', projectID: 'p3', name: 'Mobile UI', description: 'React Native UI', status: 'active' }
+  ],
+  assignments: [
+    { assignmentID: 'a1', taskID: 't1', projectID: 'p1', userID: 'u2' },
+    { assignmentID: 'a2', taskID: 't2', projectID: 'p1', userID: 'u2' },
+    { assignmentID: 'a3', taskID: 't3', projectID: 'p1', userID: 'u2' },
+    { assignmentID: 'a4', taskID: 't4', projectID: 'p2', userID: 'u3' },
+    { assignmentID: 'a5', taskID: 't5', projectID: 'p2', userID: 'u3' },
+    { assignmentID: 'a6', taskID: 't6', projectID: 'p3', userID: 'u2' },
+    { assignmentID: 'a7', taskID: 't7', projectID: 'p3', userID: 'u3' },
+    { assignmentID: 'a8', taskID: 't1', projectID: 'p1', userID: 'u5' },
+    { assignmentID: 'a9', taskID: 't2', projectID: 'p1', userID: 'u5' }
+  ],
+  timesheets: [
+    { timesheetID: 'ts1', userID: 'u2', month: 4, year: 2025, status: 'approved', submittedDate: '2025-05-02', approvedDate: '2025-05-03', managerID: 'u4', rejectionReason: '', memberSignature: '', memberSignedDate: '', managerSignature: '', managerSignedDate: '', pdfPath: '', reopenedBy: '', reopenedDate: '', reopenReason: '', reopenCount: 0 },
+    { timesheetID: 'ts2', userID: 'u2', month: 5, year: 2025, status: 'draft', submittedDate: '', approvedDate: '', managerID: 'u4', rejectionReason: '', memberSignature: '', memberSignedDate: '', managerSignature: '', managerSignedDate: '', pdfPath: '', reopenedBy: '', reopenedDate: '', reopenReason: '', reopenCount: 0 },
+    { timesheetID: 'ts3', userID: 'u3', month: 5, year: 2025, status: 'submitted', submittedDate: '2025-05-30', approvedDate: '', managerID: 'u4', rejectionReason: '', memberSignature: '', memberSignedDate: '', managerSignature: '', managerSignedDate: '', pdfPath: '', reopenedBy: '', reopenedDate: '', reopenReason: '', reopenCount: 0 }
+  ],
+  entries: [
+    { entryID: 'e1', timesheetID: 'ts2', userID: 'u2', date: '2025-05-01', projectID: 'p1', taskID: 't1', hours: 3, notes: 'Homepage wireframes' },
+    { entryID: 'e2', timesheetID: 'ts2', userID: 'u2', date: '2025-05-01', projectID: 'p1', taskID: 't2', hours: 4, notes: 'Header component' },
+    { entryID: 'e3', timesheetID: 'ts2', userID: 'u2', date: '2025-05-02', projectID: 'p3', taskID: 't6', hours: 6, notes: 'Auth endpoints' },
+    { entryID: 'e4', timesheetID: 'ts2', userID: 'u2', date: '2025-05-05', projectID: 'p1', taskID: 't3', hours: 8, notes: 'Full regression test' },
+    { entryID: 'e5', timesheetID: 'ts2', userID: 'u2', date: '2025-05-06', projectID: 'p1', taskID: 't1', hours: 5, notes: 'Mobile designs' },
+    { entryID: 'e6', timesheetID: 'ts3', userID: 'u3', date: '2025-05-01', projectID: 'p2', taskID: 't4', hours: 7, notes: 'Server rack' },
+    { entryID: 'e7', timesheetID: 'ts3', userID: 'u3', date: '2025-05-02', projectID: 'p3', taskID: 't7', hours: 6, notes: 'Nav screens' },
+    { entryID: 'e8', timesheetID: 'ts3', userID: 'u3', date: '2025-05-05', projectID: 'p2', taskID: 't5', hours: 4, notes: 'IT runbook' }
+  ],
+  auditlog: [
+    { logID: 'al1', timesheetID: 'ts1', actingUserID: 'u2', targetUserID: 'u2', timestamp: '2025-05-02T09:00:00Z', action: 'submitted', previousStatus: 'draft', newStatus: 'submitted', notes: '' },
+    { logID: 'al2', timesheetID: 'ts1', actingUserID: 'u4', targetUserID: 'u2', timestamp: '2025-05-03T10:30:00Z', action: 'approved', previousStatus: 'submitted', newStatus: 'approved', notes: '' }
+  ]
+};
+
+// Override SP methods in demo mode
+if (CONFIG.DEMO_MODE) {
+  SP.getCurrentUser = async () => ({ Email: 'admin@example.com', Title: 'Admin User' });
+  SP.readJSON = async (f) => {
+    const key = f.replace('.json','');
+    if (DEMO_DATA[key]) return JSON.parse(JSON.stringify(DEMO_DATA[key]));
+    throw new Error('not found');
+  };
+  SP.writeJSON = async (f, data) => {
+    const key = f.replace('.json','');
+    DEMO_DATA[key] = JSON.parse(JSON.stringify(data));
+    return true;
+  };
+  SP.uploadPDF = async (filename, blob) => { return '/demo/' + filename; };
+  SP.ensureFile = async () => {};
+  SP.getFormDigest = async () => 'demo';
+}
+
+// ============================================================
+// DATA LAYER — load all JSON files
+// ============================================================
+async function loadAllData() {
+  const files = ['users','projects','tasks','assignments','timesheets','entries','auditlog'];
+  await Promise.all(files.map(async f => {
+    try {
+      STATE.data[f] = await SP.readJSON(f + '.json');
+    } catch {
+      STATE.data[f] = [];
+    }
+  }));
+}
+
+async function saveData(key) {
+  await SP.writeJSON(key + '.json', STATE.data[key]);
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+const uid = () => Math.random().toString(36).slice(2,10);
+const now = () => new Date().toISOString();
+const today = () => new Date().toISOString().slice(0,10);
+const monthName = m => ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m-1];
+const fmtDate = d => { if(!d) return '—'; const p = d.slice(0,10).split('-'); return `${p[2]} ${monthName(+p[1])} ${p[0]}`; };
+const fmtMonthYear = (m,y) => `${monthName(m)} ${y}`;
+
+function activeUser() { return STATE.impersonating || STATE.currentUser; }
+
+function getBadge(status) {
+  const map = {
+    draft:'badge-draft', submitted:'badge-submitted', approved:'badge-approved',
+    rejected:'badge-rejected', membersigned:'badge-membersigned', fullysigned:'badge-fullysigned',
+    reopened:'badge-reopened', active:'badge-active', inactive:'badge-inactive',
+    admin:'badge-admin', manager:'badge-manager', member:'badge-member'
+  };
+  const label = { membersigned:'Member Signed', fullysigned:'Fully Signed' };
+  return `<span class="badge ${map[status]||'badge-draft'}">${label[status]||status}</span>`;
+}
+
+function billableBadge(b) {
+  return b ? `<span class="badge badge-billable">Billable</span>` : `<span class="badge badge-nonbillable">Non-billable</span>`;
+}
+
+function getProject(id) { return STATE.data.projects.find(p=>p.projectID===id)||{}; }
+function getTask(id) { return STATE.data.tasks.find(t=>t.taskID===id)||{}; }
+function getUser(id) { return STATE.data.users.find(u=>u.userID===id)||{}; }
+
+function getUserTimesheets(userID) {
+  return STATE.data.timesheets.filter(t=>t.userID===userID)
+    .sort((a,b) => b.year - a.year || b.month - a.month);
+}
+
+function getOrCreateTimesheet(userID, month, year) {
+  let ts = STATE.data.timesheets.find(t=>t.userID===userID&&t.month===month&&t.year===year);
+  if (!ts) {
+    ts = {
+      timesheetID: 'ts' + uid(), userID, month, year, status: 'draft',
+      submittedDate:'', approvedDate:'', managerID: getUser(userID).managerID || '',
+      rejectionReason:'', memberSignature:'', memberSignedDate:'',
+      managerSignature:'', managerSignedDate:'', pdfPath:'',
+      reopenedBy:'', reopenedDate:'', reopenReason:'', reopenCount: 0
+    };
+    STATE.data.timesheets.push(ts);
+  }
+  return ts;
+}
+
+function isLocked(ts) {
+  return ['approved','membersigned','fullysigned'].includes(ts.status);
+}
+
+function canEdit(ts) {
+  if (!ts) return true;
+  return ['draft','submitted','rejected','reopened'].includes(ts.status);
+}
+
+function getTimesheetEntries(timesheetID) {
+  return STATE.data.entries.filter(e=>e.timesheetID===timesheetID)
+    .sort((a,b) => a.date.localeCompare(b.date));
+}
+
+function getDayTotal(userID, date, timesheetID) {
+  return STATE.data.entries.filter(e=>e.userID===userID&&e.date===date).reduce((s,e)=>s+Number(e.hours),0);
+}
+
+function getAssignedTasks(userID) {
+  const assigned = STATE.data.assignments.filter(a=>a.userID===userID);
+  return assigned.map(a => ({
+    ...getTask(a.taskID),
+    project: getProject(a.projectID)
+  })).filter(t=>t.taskID && t.status==='active');
+}
+
+async function addAuditLog(timesheetID, action, prevStatus, newStatus, notes='') {
+  const actor = STATE.currentUser;
+  const target = STATE.impersonating || STATE.currentUser;
+  STATE.data.auditlog.push({
+    logID: 'al' + uid(),
+    timesheetID,
+    actingUserID: actor.userID,
+    targetUserID: target.userID,
+    timestamp: now(),
+    action, previousStatus: prevStatus, newStatus, notes
+  });
+  await saveData('auditlog');
+}
+
+function notify(msg, type='success') {
+  const el = document.createElement('div');
+  el.className = `alert alert-${type}`;
+  el.style.cssText = 'position:fixed;top:70px;right:24px;z-index:2000;min-width:280px;max-width:400px;box-shadow:var(--shadow-md);';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ============================================================
+// MODAL
+// ============================================================
+let _modalResolve = null;
+
+function openModal(title, bodyHTML, footerHTML) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').innerHTML = bodyHTML;
+  document.getElementById('modal-footer').innerHTML = footerHTML || '';
+  document.getElementById('modal-overlay').classList.add('open');
+  return new Promise(resolve => { _modalResolve = resolve; });
+}
+
+function closeModal(value) {
+  document.getElementById('modal-overlay').classList.remove('open');
+  if (_modalResolve) { _modalResolve(value); _modalResolve = null; }
+}
+
+document.getElementById('modal-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-overlay')) closeModal(null);
+});
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+const NAV = {
+  member: [
+    { id: 'dashboard', label: 'Dashboard', icon: 'home', title: 'Dashboard' },
+    { id: 'log', label: 'Log Hours', icon: 'clock', title: 'Log Hours' },
+    { id: 'mytimesheets', label: 'My Timesheets', icon: 'list', title: 'My Timesheets' },
+    { id: 'history', label: 'History', icon: 'calendar', title: 'History' }
+  ],
+  manager: [
+    { id: 'dashboard', label: 'Dashboard', icon: 'home', title: 'Dashboard' },
+    { id: 'log', label: 'Log Hours', icon: 'clock', title: 'Log Hours' },
+    { id: 'mytimesheets', label: 'My Timesheets', icon: 'list', title: 'My Timesheets' },
+    { id: 'approvals', label: 'Team Approvals', icon: 'check', title: 'Team Approvals' },
+    { id: 'teamoverview', label: 'Team Overview', icon: 'users', title: 'Team Overview' }
+  ],
+  admin: [
+    { id: 'dashboard', label: 'Dashboard', icon: 'home', title: 'Dashboard' },
+    { id: 'log', label: 'Log Hours', icon: 'clock', title: 'Log Hours' },
+    { id: 'mytimesheets', label: 'My Timesheets', icon: 'list', title: 'My Timesheets' },
+    null, // divider
+    { id: 'projects', label: 'Projects', icon: 'folder', title: 'Projects' },
+    { id: 'tasks', label: 'Tasks', icon: 'list', title: 'Tasks' },
+    { id: 'users', label: 'Users', icon: 'users', title: 'Users' },
+    null,
+    { id: 'alltimesheets', label: 'All Timesheets', icon: 'log', title: 'All Timesheets' },
+    { id: 'auditlog', label: 'Audit Log', icon: 'shield', title: 'Audit Log' },
+    { id: 'settings', label: 'Settings', icon: 'settings', title: 'Settings' }
+  ]
+};
+
+function buildNav() {
+  const role = STATE.currentUser.role;
+  const items = NAV[role] || NAV.member;
+  const nav = document.getElementById('sidebar-nav');
+  nav.innerHTML = '';
+  items.forEach(item => {
+    if (!item) {
+      const d = document.createElement('div');
+      d.style.cssText = 'height:1px;background:rgba(255,255,255,0.07);margin:8px 20px;';
+      nav.appendChild(d);
+      return;
+    }
+    const a = document.createElement('a');
+    a.innerHTML = ico(item.icon, 15) + item.label;
+    a.dataset.page = item.id;
+    a.dataset.title = item.title;
+    a.onclick = () => navigateTo(item.id, item.title);
+    nav.appendChild(a);
+  });
+}
+
+function navigateTo(pageId, title) {
+  document.querySelectorAll('#sidebar-nav a').forEach(a => a.classList.remove('active'));
+  const link = document.querySelector(`#sidebar-nav a[data-page="${pageId}"]`);
+  if (link) link.classList.add('active');
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const page = document.getElementById('page-' + pageId);
+  if (page) { page.classList.add('active'); renderPage(pageId); }
+  document.getElementById('topbar-title').textContent = title || pageId;
+  STATE.currentPage = pageId;
+  // Close mobile sidebar
+  document.getElementById('sidebar').classList.remove('open');
+}
+
+// ============================================================
+// PAGE RENDERERS
+// ============================================================
+function renderPage(id) {
+  const renders = {
+    dashboard: renderDashboard,
+    log: renderLogHours,
+    mytimesheets: renderMyTimesheets,
+    history: renderHistory,
+    approvals: renderApprovals,
+    teamoverview: renderTeamOverview,
+    projects: renderProjects,
+    tasks: renderTasks,
+    users: renderUsers,
+    alltimesheets: renderAllTimesheets,
+    auditlog: renderAuditLog,
+    settings: renderSettings
+  };
+  if (renders[id]) renders[id]();
+}
+
+// ---- DASHBOARD ----
+function renderDashboard() {
+  const user = activeUser();
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+  const myTS = getUserTimesheets(user.userID);
+  const currentTS = myTS.find(t=>t.month===month&&t.year===year);
+  const myEntries = currentTS ? getTimesheetEntries(currentTS.timesheetID) : [];
+  const totalHours = myEntries.reduce((s,e)=>s+Number(e.hours),0);
+  const billableHours = myEntries.filter(e=>getProject(e.projectID).billable).reduce((s,e)=>s+Number(e.hours),0);
+  const nonBillableHours = totalHours - billableHours;
+
+  let pendingApprovals = '';
+  if (STATE.currentUser.role === 'manager' || STATE.currentUser.role === 'admin') {
+    const pending = STATE.data.timesheets.filter(t => {
+      if (t.status !== 'submitted') return false;
+      if (STATE.currentUser.role === 'manager') {
+        const u = getUser(t.userID);
+        return u.managerID === STATE.currentUser.userID;
+      }
+      return true;
+    });
+    if (pending.length) {
+      pendingApprovals = `<div class="alert alert-info" style="margin-bottom:24px;">
+        ${ico('alert',14)} <strong>${pending.length}</strong> timesheet${pending.length>1?'s':''} pending your approval.
+        <a href="#" onclick="navigateTo('approvals','Team Approvals');return false;" style="margin-left:8px;color:var(--info);font-weight:500;">Review →</a>
+      </div>`;
+    }
+  }
+
+  const recentEntries = myEntries.slice(-5).reverse();
+  const recentHTML = recentEntries.length ? `
+    <div class="card mb-24">
+      <div class="card-header"><h2>Recent entries — ${fmtMonthYear(month,year)}</h2>
+        <a href="#" onclick="navigateTo('log','Log Hours');return false;" class="btn btn-secondary btn-sm">${ico('plus',13)} Add entry</a>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Project</th><th>Task</th><th>Hours</th></tr></thead>
+          <tbody>
+            ${recentEntries.map(e => {
+              const p = getProject(e.projectID);
+              const t = getTask(e.taskID);
+              return `<tr>
+                <td class="text-mono">${fmtDate(e.date)}</td>
+                <td>${p.name||'—'} ${billableBadge(p.billable)}</td>
+                <td>${t.name||'—'}</td>
+                <td class="text-mono">${e.hours}h</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>` : `<div class="card mb-24"><div class="card-body"><div class="empty-state">${ico('clock',32)}<p>No entries for ${fmtMonthYear(month,year)} yet.</p>
+      <a href="#" onclick="navigateTo('log','Log Hours');return false;" class="btn btn-primary" style="margin-top:12px;">${ico('plus',13)} Log your first hours</a></div></div></div>`;
+
+  document.getElementById('page-dashboard').innerHTML = `
+    <div style="margin-bottom:24px;">
+      <h2 style="font-size:20px;font-weight:500;">Good day, ${user.displayName.split(' ')[0]}.</h2>
+      <p style="color:var(--text2);font-size:13px;margin-top:4px;">${fmtMonthYear(month,year)} · ${currentTS ? getBadge(currentTS.status) : getBadge('draft')}</p>
+    </div>
+    ${pendingApprovals}
+    <div class="stats-grid mb-24">
+      <div class="stat-card"><div class="label">Total hours</div><div class="value">${totalHours}</div><div class="sub">${fmtMonthYear(month,year)}</div></div>
+      <div class="stat-card"><div class="label">Billable</div><div class="value">${billableHours}</div><div class="sub">hours this month</div></div>
+      <div class="stat-card"><div class="label">Non-billable</div><div class="value">${nonBillableHours}</div><div class="sub">hours this month</div></div>
+      <div class="stat-card"><div class="label">Status</div><div class="value" style="font-size:14px;padding-top:6px;">${currentTS ? getBadge(currentTS.status) : getBadge('draft')}</div><div class="sub">${currentTS ? 'submitted ' + fmtDate(currentTS.submittedDate) : 'not submitted'}</div></div>
+    </div>
+    ${recentHTML}`;
+}
+
+// ---- LOG HOURS ----
+function renderLogHours() {
+  const user = activeUser();
+  const now = new Date();
+  const defMonth = String(now.getMonth()+1).padStart(2,'0');
+  const defYear = now.getFullYear();
+  const tasks = getAssignedTasks(user.userID);
+
+  const taskOptions = tasks.map(t =>
+    `<option value="${t.taskID}" data-project="${t.projectID}">${t.project.name} — ${t.name} (${t.project.billable?'Billable':'Non-billable'})</option>`
+  ).join('');
+
+  document.getElementById('page-log').innerHTML = `
+    <div class="card" style="max-width:640px;">
+      <div class="card-header"><h2>${ico('clock',15)} Log Hours</h2></div>
+      <div class="card-body">
+        <div id="log-ts-status"></div>
+        <div class="form-grid" id="log-form-wrap">
+          <div class="form-group" style="grid-column:1/-1;">
+            <label>Month / Year</label>
+            <div style="display:flex;gap:8px;">
+              <select id="log-month" style="flex:1;">
+                ${Array.from({length:12},(_,i)=>`<option value="${i+1}" ${i+1===now.getMonth()+1?'selected':''}>${monthName(i+1)}</option>`).join('')}
+              </select>
+              <select id="log-year" style="width:100px;">
+                ${[defYear-2,defYear-1,defYear,defYear+1].map(y=>`<option value="${y}" ${y===defYear?'selected':''}>${y}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Date</label>
+            <input type="date" id="log-date" value="${today()}" onchange="updateLogWarning()">
+          </div>
+          <div class="form-group" style="grid-column:1/-1;">
+            <label>Task (assigned to you)</label>
+            <select id="log-task" onchange="updateLogProjectBadge()">
+              <option value="">— select a task —</option>
+              ${taskOptions}
+            </select>
+            <div id="log-project-badge" style="margin-top:4px;"></div>
+          </div>
+          <div class="form-group">
+            <label>Hours</label>
+            <input type="number" id="log-hours" min="0.25" max="24" step="0.25" value="8" onchange="updateLogWarning()">
+          </div>
+          <div class="form-group" style="grid-column:1/-1;">
+            <label>Notes (optional)</label>
+            <textarea id="log-notes" placeholder="What did you work on?"></textarea>
+          </div>
+          <div id="log-warning" style="grid-column:1/-1;"></div>
+          <div class="form-actions" style="grid-column:1/-1;">
+            <button class="btn btn-primary" onclick="saveEntry()">${ico('plus',13)} Save Entry</button>
+          </div>
+        </div>
+        <hr class="divider">
+        <div id="log-day-entries"></div>
+      </div>
+    </div>`;
+
+  checkLogMonthStatus();
+  updateLogWarning();
+
+  document.getElementById('log-month').onchange = checkLogMonthStatus;
+  document.getElementById('log-year').onchange = checkLogMonthStatus;
+}
+
+function checkLogMonthStatus() {
+  const month = +document.getElementById('log-month').value;
+  const year = +document.getElementById('log-year').value;
+  const user = activeUser();
+  const ts = STATE.data.timesheets.find(t=>t.userID===user.userID&&t.month===month&&t.year===year);
+  const statusEl = document.getElementById('log-ts-status');
+  const formWrap = document.getElementById('log-form-wrap');
+
+  if (ts && isLocked(ts)) {
+    statusEl.innerHTML = `<div class="alert alert-info">${ico('lock',14)} This timesheet is <strong>${ts.status}</strong> and cannot be edited. ${STATE.currentUser.role==='admin'?'You can reopen it from <a href="#" onclick="navigateTo(\'alltimesheets\',\'All Timesheets\');return false;">All Timesheets</a>.':''}</div>`;
+    formWrap.style.opacity = '0.4';
+    formWrap.style.pointerEvents = 'none';
+  } else {
+    const badge = ts ? `Status: ${getBadge(ts.status)}` : 'New timesheet (Draft)';
+    statusEl.innerHTML = ts && ts.status==='reopened' ?
+      `<div class="alert alert-amber">${ico('alert',14)} This timesheet was reopened by an admin on ${fmtDate(ts.reopenedDate)}. Reason: <strong>${ts.reopenReason}</strong></div>` :
+      `<div style="margin-bottom:12px;font-size:12px;color:var(--text2);">${badge}</div>`;
+    formWrap.style.opacity = '';
+    formWrap.style.pointerEvents = '';
+  }
+  renderDayEntries();
+}
+
+function updateLogProjectBadge() {
+  const sel = document.getElementById('log-task');
+  const opt = sel.options[sel.selectedIndex];
+  const pid = opt ? opt.dataset.project : '';
+  const p = getProject(pid);
+  document.getElementById('log-project-badge').innerHTML = pid ? billableBadge(p.billable) : '';
+}
+
+function updateLogWarning() {
+  const date = document.getElementById('log-date')?.value;
+  const hours = parseFloat(document.getElementById('log-hours')?.value)||0;
+  if (!date) return;
+  const user = activeUser();
+  const existing = STATE.data.entries.filter(e=>e.userID===user.userID&&e.date===date);
+  const dayTotal = existing.reduce((s,e)=>s+Number(e.hours),0) + hours;
+  const warn = document.getElementById('log-warning');
+  if (warn) warn.innerHTML = dayTotal >= 8
+    ? `<div class="alert alert-amber">${ico('alert',14)} Total for ${fmtDate(date)}: <strong>${dayTotal}h</strong>. More than 8 hours — please confirm this is intentional.</div>`
+    : '';
+  renderDayEntries();
+}
+
+function renderDayEntries() {
+  const date = document.getElementById('log-date')?.value;
+  if (!date) return;
+  const user = activeUser();
+  const entries = STATE.data.entries.filter(e=>e.userID===user.userID&&e.date===date);
+  const el = document.getElementById('log-day-entries');
+  if (!el) return;
+  if (!entries.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="section-title">Entries for ${fmtDate(date)}</div>
+    <table><thead><tr><th>Task</th><th>Hours</th><th>Notes</th><th></th></tr></thead><tbody>
+    ${entries.map(e => {
+      const p = getProject(e.projectID); const t = getTask(e.taskID);
+      return `<tr>
+        <td>${p.name||'—'} — ${t.name||'—'} ${billableBadge(p.billable)}</td>
+        <td class="text-mono">${e.hours}h</td>
+        <td style="color:var(--text2);font-size:12px;">${e.notes||'—'}</td>
+        <td><button class="btn btn-secondary btn-sm btn-icon" onclick="deleteEntry('${e.entryID}')" title="Delete">${ico('trash',13)}</button></td>
+      </tr>`;
+    }).join('')}
+    </tbody></table>`;
+}
+
+async function saveEntry() {
+  const date = document.getElementById('log-date').value;
+  const taskID = document.getElementById('log-task').value;
+  const hours = parseFloat(document.getElementById('log-hours').value);
+  const notes = document.getElementById('log-notes').value;
+  const month = +document.getElementById('log-month').value;
+  const year = +document.getElementById('log-year').value;
+
+  if (!date || !taskID || !hours) { notify('Please fill in date, task and hours.','amber'); return; }
+
+  const user = activeUser();
+  const task = getTask(taskID);
+
+  // Duplicate check
+  const dup = STATE.data.entries.find(e=>e.userID===user.userID&&e.date===date&&e.taskID===taskID);
+  if (dup) {
+    const ok = await openModal('Duplicate entry',
+      `<p>You already have an entry for <strong>${task.name}</strong> on ${fmtDate(date)}. Save anyway?</p>`,
+      `<button class="btn btn-secondary" onclick="closeModal(false)">Cancel</button>
+       <button class="btn btn-amber" onclick="closeModal(true)">Save anyway</button>`);
+    if (!ok) return;
+  }
+
+  const ts = getOrCreateTimesheet(user.userID, month, year);
+  if (isLocked(ts)) { notify('This timesheet is locked and cannot be edited.','amber'); return; }
+
+  const entry = { entryID:'e'+uid(), timesheetID:ts.timesheetID, userID:user.userID, date, projectID:task.projectID, taskID, hours, notes };
+  STATE.data.entries.push(entry);
+  await saveData('entries');
+  await saveData('timesheets');
+
+  document.getElementById('log-notes').value = '';
+  document.getElementById('log-hours').value = '8';
+  updateLogWarning();
+  notify('Entry saved.');
+}
+
+async function deleteEntry(entryID) {
+  const e = STATE.data.entries.find(e=>e.entryID===entryID);
+  if (!e) return;
+  const ts = STATE.data.timesheets.find(t=>t.timesheetID===e.timesheetID);
+  if (ts && isLocked(ts)) { notify('Cannot delete from a locked timesheet.','amber'); return; }
+  STATE.data.entries = STATE.data.entries.filter(e=>e.entryID!==entryID);
+  await saveData('entries');
+  renderDayEntries();
+  notify('Entry deleted.');
+}
+
+// ---- MY TIMESHEETS ----
+function renderMyTimesheets() {
+  const user = activeUser();
+  const sheets = getUserTimesheets(user.userID);
+
+  const rows = sheets.length ? sheets.map(ts => `
+    <tr>
+      <td class="text-mono">${fmtMonthYear(ts.month, ts.year)}</td>
+      <td>${getBadge(ts.status)}</td>
+      <td>${fmtDate(ts.submittedDate)}</td>
+      <td>${fmtDate(ts.approvedDate)}</td>
+      <td>
+        <button class="btn btn-secondary btn-sm" onclick="openTimesheetDetail('${ts.timesheetID}')">${ico('list',13)} View</button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="5"><div class="empty-state">No timesheets yet.</div></td></tr>';
+
+  document.getElementById('page-mytimesheets').innerHTML = `
+    <div class="card">
+      <div class="card-header"><h2>My Timesheets</h2></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Period</th><th>Status</th><th>Submitted</th><th>Approved</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+// ---- HISTORY ----
+function renderHistory() {
+  const user = activeUser();
+  const sheets = getUserTimesheets(user.userID);
+  if (!sheets.length) {
+    document.getElementById('page-history').innerHTML = `<div class="empty-state">${ico('calendar',32)}<p>No timesheet history yet.</p></div>`;
+    return;
+  }
+  const tabs = sheets.map(ts =>
+    `<div class="month-tab ${ts.timesheetID === sheets[0].timesheetID ? 'active':''}" onclick="selectHistoryMonth('${ts.timesheetID}',this)">
+      ${monthName(ts.month)} ${ts.year}
+      <span class="ts-dot" style="background:${statusColor(ts.status)};"></span>
+    </div>`).join('');
+
+  document.getElementById('page-history').innerHTML = `
+    <div class="month-tabs">${tabs}</div>
+    <div id="history-detail"></div>`;
+  renderTimesheetDetail(sheets[0].timesheetID, 'history-detail', false);
+}
+
+function statusColor(s) {
+  return {draft:'#aaa',submitted:'#2a4d7a',approved:'#2d5a3d',rejected:'#b83232',membersigned:'#1a5fa8',fullysigned:'#1a6b45',reopened:'#b87a20'}[s]||'#aaa';
+}
+
+function selectHistoryMonth(id, el) {
+  document.querySelectorAll('.month-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  renderTimesheetDetail(id, 'history-detail', false);
+}
+
+// ---- TIMESHEET DETAIL (shared renderer) ----
+function renderTimesheetDetail(timesheetID, containerId, showActions=true) {
+  const ts = STATE.data.timesheets.find(t=>t.timesheetID===timesheetID);
+  if (!ts) return;
+  const entries = getTimesheetEntries(timesheetID);
+  const user = getUser(ts.userID);
+  const manager = getUser(ts.managerID);
+  const container = document.getElementById(containerId);
+
+  // Group entries by day
+  const byDay = {};
+  entries.forEach(e => { if(!byDay[e.date]) byDay[e.date] = []; byDay[e.date].push(e); });
+
+  let totalBillable = 0, totalNonBillable = 0;
+  const projectTotals = {};
+
+  entries.forEach(e => {
+    const p = getProject(e.projectID);
+    const h = Number(e.hours);
+    if (p.billable) totalBillable += h; else totalNonBillable += h;
+    if (!projectTotals[e.projectID]) projectTotals[e.projectID] = { project:p, hours:0 };
+    projectTotals[e.projectID].hours += h;
+  });
+
+  const dayRows = Object.keys(byDay).sort().map(date => {
+    const dayEntries = byDay[date];
+    const dayTotal = dayEntries.reduce((s,e)=>s+Number(e.hours),0);
+    const warn = dayTotal >= 8 ? `<span class="entry-day-warning"> ⚠ ${dayTotal}h</span>` : `<span>${dayTotal}h</span>`;
+    const rows = dayEntries.map(e => {
+      const p = getProject(e.projectID); const t = getTask(e.taskID);
+      return `<tr>
+        <td style="padding-left:28px;color:var(--text2);font-size:12px;">—</td>
+        <td>${p.name||'—'} ${billableBadge(p.billable)}</td>
+        <td>${t.name||'—'}</td>
+        <td class="text-mono">${e.hours}h</td>
+        <td style="color:var(--text2);font-size:12px;">${e.notes||''}</td>
+        ${canEdit(ts) && showActions ? `<td><button class="btn btn-secondary btn-sm btn-icon" onclick="deleteEntry('${e.entryID}');openTimesheetDetail('${timesheetID}')">${ico('trash',12)}</button></td>` : '<td></td>'}
+      </tr>`;
+    }).join('');
+    return `<tr style="background:var(--surface2);">
+      <td colspan="6" style="font-size:11px;font-family:var(--mono);color:var(--text2);padding:8px 14px;letter-spacing:0.05em;text-transform:uppercase;">
+        ${fmtDate(date)} ${warn}
+      </td>
+    </tr>${rows}`;
+  }).join('');
+
+  const projectSummary = Object.values(projectTotals).map(pt =>
+    `<tr><td>${pt.project.name||'—'} ${billableBadge(pt.project.billable)}</td><td class="text-mono text-right">${pt.hours}h</td></tr>`
+  ).join('');
+
+  // Actions based on status and role
+  let actionsHTML = '';
+  if (showActions) {
+    const role = STATE.currentUser.role;
+    const isActingUser = activeUser().userID === ts.userID;
+    const isManagerOf = (role==='manager'||role==='admin') && (ts.managerID===STATE.currentUser.userID||role==='admin');
+
+    if (ts.status==='draft'||ts.status==='rejected'||ts.status==='reopened') {
+      if (isActingUser) actionsHTML += `<button class="btn btn-primary" onclick="submitTimesheet('${timesheetID}','${containerId}')">${ico('check',13)} Submit for Approval</button>`;
+    }
+    if (ts.status==='submitted' && isManagerOf) {
+      actionsHTML += `<button class="btn btn-primary" onclick="approveTimesheet('${timesheetID}','${containerId}')">${ico('check',13)} Approve</button>
+        <button class="btn btn-danger" onclick="rejectTimesheet('${timesheetID}','${containerId}')">${ico('x',13)} Reject</button>`;
+    }
+    if (ts.status==='approved' && isActingUser) {
+      actionsHTML += `<button class="btn btn-primary" onclick="signTimesheet('${timesheetID}','${containerId}','member')">${ico('edit',13)} Sign (Team Member)</button>`;
+    }
+    if (ts.status==='membersigned' && isManagerOf) {
+      actionsHTML += `<button class="btn btn-primary" onclick="signTimesheet('${timesheetID}','${containerId}','manager')">${ico('edit',13)} Sign (Manager)</button>`;
+    }
+    if (['approved','membersigned','fullysigned'].includes(ts.status) && role==='admin') {
+      actionsHTML += `<button class="btn btn-amber" onclick="reopenTimesheet('${timesheetID}','${containerId}')">${ico('unlock',13)} Reopen</button>`;
+    }
+    if (ts.status==='fullysigned' && ts.pdfPath) {
+      actionsHTML += `<a href="${ts.pdfPath}" target="_blank" class="btn btn-secondary">${ico('pdf',13)} View PDF</a>`;
+    }
+    if (ts.status==='fullysigned') {
+      actionsHTML += `<button class="btn btn-secondary" onclick="regeneratePDF('${timesheetID}')">${ico('pdf',13)} Download PDF</button>`;
+    }
+  }
+
+  const reopenBanner = ts.status==='reopened' ? `<div class="alert alert-amber">${ico('alert',14)} Reopened by ${getUser(ts.reopenedBy).displayName||'admin'} on ${fmtDate(ts.reopenedDate)}. Reason: <strong>${ts.reopenReason}</strong></div>` : '';
+  const rejectBanner = ts.status==='rejected' ? `<div class="alert alert-danger">${ico('alert',14)} Rejected: <strong>${ts.rejectionReason}</strong></div>` : '';
+
+  container.innerHTML = `
+    ${reopenBanner}${rejectBanner}
+    <div class="card mb-24">
+      <div class="card-header">
+        <div class="ts-status-header">
+          <span style="font-weight:600;">${user.displayName} — ${fmtMonthYear(ts.month,ts.year)}</span>
+          ${getBadge(ts.status)}
+        </div>
+        <div class="gap-row">${actionsHTML}</div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th></th><th>Project</th><th>Task</th><th>Hours</th><th>Notes</th><th></th></tr></thead>
+          <tbody>
+            ${dayRows||'<tr><td colspan="6"><div class="empty-state">No entries.</div></td></tr>'}
+            <tr class="tr-total">
+              <td colspan="3" style="font-size:12px;">Total billable</td>
+              <td class="text-mono">${totalBillable}h</td><td></td><td></td>
+            </tr>
+            <tr class="tr-total">
+              <td colspan="3" style="font-size:12px;">Total non-billable</td>
+              <td class="text-mono">${totalNonBillable}h</td><td></td><td></td>
+            </tr>
+            <tr class="tr-total" style="border-top:2px solid var(--border2);">
+              <td colspan="3" style="font-weight:700;">Grand total</td>
+              <td class="text-mono" style="font-weight:700;">${totalBillable+totalNonBillable}h</td><td></td><td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card" style="max-width:360px;">
+      <div class="card-header"><h2>Summary by project</h2></div>
+      <div class="table-wrap">
+        <table><tbody>${projectSummary||'<tr><td colspan="2">—</td></tr>'}</tbody></table>
+      </div>
+    </div>`;
+}
+
+function openTimesheetDetail(timesheetID) {
+  const ts = STATE.data.timesheets.find(t=>t.timesheetID===timesheetID);
+  if (!ts) return;
+  const user = getUser(ts.userID);
+  const id = 'detail-' + timesheetID;
+
+  openModal(`Timesheet — ${user.displayName}, ${fmtMonthYear(ts.month,ts.year)}`,
+    `<div id="${id}"></div>`,
+    ''
+  );
+  renderTimesheetDetail(timesheetID, id, true);
+}
+
+// ---- TIMESHEET ACTIONS ----
+async function submitTimesheet(timesheetID, containerId) {
+  const ts = STATE.data.timesheets.find(t=>t.timesheetID===timesheetID);
+  const prev = ts.status;
+  ts.status = 'submitted';
+  ts.submittedDate = today();
+  await saveData('timesheets');
+  await addAuditLog(timesheetID,'submitted',prev,'submitted');
+  notify('Timesheet submitted for approval.');
+  renderTimesheetDetail(timesheetID, containerId, true);
+  if (STATE.currentPage === 'mytimesheets') renderMyTimesheets();
+}
+
+async function approveTimesheet(timesheetID, containerId) {
+  const ts = STATE.data.timesheets.find(t=>t.timesheetID===timesheetID);
+  const prev = ts.status;
+  ts.status = 'approved';
+  ts.approvedDate = today();
+  ts.managerID = STATE.currentUser.userID;
+  await saveData('timesheets');
+  await addAuditLog(timesheetID,'approved',prev,'approved');
+  notify('Timesheet approved.');
+  renderTimesheetDetail(timesheetID, containerId, true);
+  if (STATE.currentPage==='approvals') renderApprovals();
+}
+
+async function rejectTimesheet(timesheetID, containerId) {
+  const reason = await openModal('Reject Timesheet',
+    `<div class="form-group"><label>Rejection reason (required)</label><textarea id="reject-reason" placeholder="Explain why this timesheet is being rejected…" style="min-height:100px;"></textarea></div>`,
+    `<button class="btn btn-secondary" onclick="closeModal(null)">Cancel</button>
+     <button class="btn btn-danger" onclick="closeModal(document.getElementById('reject-reason').value)">Reject</button>`);
+  if (!reason || !reason.trim()) return;
+  const ts = STATE.data.timesheets.find(t=>t.timesheetID===timesheetID);
+  const prev = ts.status;
+  ts.status = 'rejected';
+  ts.rejectionReason = reason;
+  await saveData('timesheets');
+  await addAuditLog(timesheetID,'rejected',prev,'rejected',reason);
+  notify('Timesheet rejected.');
+  renderTimesheetDetail(timesheetID, containerId, true);
+  if (STATE.currentPage==='approvals') renderApprovals();
+}
+
+async function reopenTimesheet(timesheetID, containerId) {
+  const ts = STATE.data.timesheets.find(t=>t.timesheetID===timesheetID);
+  const isFullySigned = ts.status === 'fullysigned';
+  const warningHTML = isFullySigned ? `<div class="alert alert-danger">${ico('alert',14)} This timesheet is fully signed. Reopening it will <strong>void the existing PDF</strong>. This action is logged.</div>` : '';
+
+  const reason = await openModal('Reopen Timesheet',
+    `${warningHTML}<div class="form-group"><label>Reason for reopening (required)</label><textarea id="reopen-reason" placeholder="Why is this timesheet being reopened?" style="min-height:100px;"></textarea></div>`,
+    `<button class="btn btn-secondary" onclick="closeModal(null)">Cancel</button>
+     <button class="btn btn-amber" onclick="closeModal(document.getElementById('reopen-reason').value)">${ico('unlock',13)} Confirm Reopen</button>`);
+  if (!reason || !reason.trim()) return;
+
+  const prev = ts.status;
+  if (isFullySigned && ts.pdfPath) {
+    // Archive note — in demo we just clear; in production rename file via SP REST
+    ts.pdfPath = ts.pdfPath.replace('.pdf', `-voided-${Date.now()}.pdf`);
+  }
+  ts.status = 'reopened';
+  ts.reopenedBy = STATE.currentUser.userID;
+  ts.reopenedDate = today();
+  ts.reopenReason = reason;
+  ts.reopenCount = (ts.reopenCount||0) + 1;
+  ts.memberSignature = '';
+  ts.memberSignedDate = '';
+  ts.managerSignature = '';
+  ts.managerSignedDate = '';
+  await saveData('timesheets');
+  await addAuditLog(timesheetID,'reopened',prev,'reopened',reason);
+  notify('Timesheet reopened.');
+  renderTimesheetDetail(timesheetID, containerId, true);
+  if (containerId.startsWith('detail-')) closeModal();
+  if (STATE.currentPage==='alltimesheets') renderAllTimesheets();
+}
+
+// ---- SIGNING ----
+async function signTimesheet(timesheetID, containerId, who) {
+  const ts = STATE.data.timesheets.find(t=>t.timesheetID===timesheetID);
+  const signer = who==='member' ? activeUser() : STATE.currentUser;
+  const signerName = signer.displayName;
+  const isOnBehalf = who==='member' && STATE.impersonating;
+  const label = isOnBehalf
+    ? `Signing as <strong>${signer.displayName}</strong> on behalf (Admin: ${STATE.currentUser.displayName})`
+    : `Signing as <strong>${signerName}</strong>`;
+
+  const sigHTML = `
+    <p style="margin-bottom:16px;font-size:13px;">${label}</p>
+    <div class="form-group mb-16">
+      <label>Full name</label>
+      <input type="text" id="sig-name" value="${signerName}" placeholder="Type your full name">
+    </div>
+    <div class="form-group" style="margin-bottom:8px;">
+      <label>Signature (draw below)</label>
+      <div class="sig-wrap">
+        <canvas id="sig-canvas" width="480" height="120"></canvas>
+        <button class="btn btn-secondary btn-sm sig-clear" onclick="clearSig()">Clear</button>
+      </div>
+    </div>
+    <p style="font-size:11px;color:var(--text3);">Drawing is optional — typed name is sufficient.</p>`;
+
+  const confirmed = await openModal(who==='member' ? 'Team Member Signature' : 'Manager Signature', sigHTML,
+    `<button class="btn btn-secondary" onclick="closeModal(false)">Cancel</button>
+     <button class="btn btn-primary" onclick="closeModal(true)">${ico('edit',13)} Confirm Signature</button>`);
+
+  if (!confirmed) return;
+
+  const name = document.getElementById('sig-name')?.value || signerName;
+  const canvas = document.getElementById('sig-canvas');
+  const sigData = canvas ? canvas.toDataURL() : '';
+  const sigText = isOnBehalf ? `Signed by ${STATE.currentUser.displayName} on behalf of ${signerName}` : name;
+
+  if (who === 'member') {
+    ts.memberSignature = sigText + '|' + sigData;
+    ts.memberSignedDate = today();
+    ts.status = 'membersigned';
+    await saveData('timesheets');
+    await addAuditLog(timesheetID,'member_signed','approved','membersigned');
+    notify('Signed as team member.');
+  } else {
+    ts.managerSignature = sigText + '|' + sigData;
+    ts.managerSignedDate = today();
+    ts.status = 'fullysigned';
+    await saveData('timesheets');
+    await addAuditLog(timesheetID,'manager_signed','membersigned','fullysigned');
+    notify('Timesheet fully signed. Generating PDF…');
+    await generateAndUploadPDF(timesheetID);
+  }
+  renderTimesheetDetail(timesheetID, containerId, true);
+}
+
+function initSigPad() {
+  const canvas = document.getElementById('sig-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  let drawing = false;
+  let lastX, lastY;
+  ctx.strokeStyle = '#1a1917';
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+
+  const getPos = e => {
+    const rect = canvas.getBoundingClientRect();
+    const src = e.touches ? e.touches[0] : e;
+    return [src.clientX - rect.left, src.clientY - rect.top];
+  };
+  canvas.addEventListener('mousedown', e => { drawing=true; [lastX,lastY]=getPos(e); });
+  canvas.addEventListener('mousemove', e => {
+    if(!drawing) return;
+    const [x,y] = getPos(e);
+    ctx.beginPath(); ctx.moveTo(lastX,lastY); ctx.lineTo(x,y); ctx.stroke();
+    [lastX,lastY]=[x,y];
+  });
+  canvas.addEventListener('mouseup', () => drawing=false);
+  canvas.addEventListener('mouseleave', () => drawing=false);
+  canvas.addEventListener('touchstart', e => { e.preventDefault(); drawing=true; [lastX,lastY]=getPos(e); }, {passive:false});
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if(!drawing) return;
+    const [x,y] = getPos(e);
+    ctx.beginPath(); ctx.moveTo(lastX,lastY); ctx.lineTo(x,y); ctx.stroke();
+    [lastX,lastY]=[x,y];
+  }, {passive:false});
+  canvas.addEventListener('touchend', () => drawing=false);
+}
+function clearSig() {
+  const c = document.getElementById('sig-canvas');
+  if(c) c.getContext('2d').clearRect(0,0,c.width,c.height);
+}
+
+// Watch for sig-canvas being added to DOM
+const sigObserver = new MutationObserver(() => {
+  if (document.getElementById('sig-canvas')) initSigPad();
+});
+sigObserver.observe(document.getElementById('modal-body'), { childList:true, subtree:true });
+
+// ---- PDF GENERATION ----
+async function generateAndUploadPDF(timesheetID) {
+  const ts = STATE.data.timesheets.find(t=>t.timesheetID===timesheetID);
+  const user = getUser(ts.userID);
+  const manager = getUser(ts.managerID);
+  const entries = getTimesheetEntries(timesheetID);
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  const W = 210, margin = 20;
+
+  // Header
+  doc.setFillColor(26,25,23);
+  doc.rect(0, 0, W, 28, 'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(16); doc.setFont('helvetica','bold');
+  doc.text(CONFIG.ORG_NAME, margin, 12);
+  doc.setFontSize(9); doc.setFont('helvetica','normal');
+  doc.text('TIMESHEET', margin, 20);
+  doc.setTextColor(150,150,150);
+  doc.text(`${user.displayName} · ${fmtMonthYear(ts.month,ts.year)}`, W-margin, 20, {align:'right'});
+
+  // Status history
+  doc.setTextColor(80,80,80); doc.setFontSize(8);
+  let y = 36;
+  doc.text(`Submitted: ${fmtDate(ts.submittedDate)}   Approved: ${fmtDate(ts.approvedDate)}${ts.reopenCount?'   Reopen count: '+ts.reopenCount:''}`, margin, y);
+  y += 10;
+
+  // Group by project/task
+  const grouped = {};
+  entries.forEach(e => {
+    const key = e.projectID + '|' + e.taskID;
+    if (!grouped[key]) grouped[key] = { p: getProject(e.projectID), t: getTask(e.taskID), entries: [] };
+    grouped[key].entries.push(e);
+  });
+
+  const tableData = [];
+  let totalBillable = 0, totalNon = 0;
+  Object.values(grouped).forEach(g => {
+    const hrs = g.entries.reduce((s,e)=>s+Number(e.hours),0);
+    if(g.p.billable) totalBillable+=hrs; else totalNon+=hrs;
+    tableData.push([g.p.name+(g.p.billable?' (B)':' (NB)'), g.t.name, hrs+'h', g.entries.map(e=>fmtDate(e.date)+': '+e.hours+'h').join('\n')]);
+  });
+
+  doc.autoTable({
+    startY: y,
+    head: [['Project','Task','Total','Daily breakdown']],
+    body: tableData,
+    foot: [
+      ['','Total billable',''+totalBillable+'h',''],
+      ['','Total non-billable',''+totalNon+'h',''],
+      ['','GRAND TOTAL',''+(totalBillable+totalNon)+'h','']
+    ],
+    styles: { fontSize: 8, cellPadding: 3 },
+    headStyles: { fillColor: [26,25,23], textColor: 255 },
+    footStyles: { fillColor: [240,239,233], fontStyle:'bold' },
+    columnStyles: { 3: { fontSize: 7, cellWidth: 60 } },
+    margin: { left: margin, right: margin }
+  });
+
+  y = doc.lastAutoTable.finalY + 12;
+
+  // Signatures
+  if (y > 230) { doc.addPage(); y = 20; }
+  doc.setDrawColor(200,200,195);
+  doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(26,25,23);
+  doc.text('Signatures', margin, y); y += 6;
+  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(80,80,80);
+
+  const memberSig = ts.memberSignature ? ts.memberSignature.split('|')[0] : '';
+  const managerSig = ts.managerSignature ? ts.managerSignature.split('|')[0] : '';
+  const memberSigImg = ts.memberSignature ? ts.memberSignature.split('|')[1] : '';
+  const managerSigImg = ts.managerSignature ? ts.managerSignature.split('|')[1] : '';
+
+  const drawSigBlock = (label, sigText, sigImg, xOff, yStart) => {
+    doc.setFont('helvetica','bold'); doc.text(label, margin+xOff, yStart);
+    doc.setFont('helvetica','normal');
+    doc.text(sigText||'—', margin+xOff, yStart+6);
+    if (sigImg && sigImg.startsWith('data:image') && sigImg.length > 100) {
+      try { doc.addImage(sigImg, 'PNG', margin+xOff, yStart+9, 60, 20); } catch(e) {}
+    }
+    doc.setDrawColor(180,180,175);
+    doc.line(margin+xOff, yStart+32, margin+xOff+80, yStart+32);
+    doc.setFontSize(7); doc.setTextColor(130,130,125);
+    doc.text('Signature', margin+xOff, yStart+36);
+    doc.setFontSize(8); doc.setTextColor(80,80,80);
+  };
+  drawSigBlock('Team Member', `${memberSig}\n${fmtDate(ts.memberSignedDate)}`, memberSigImg, 0, y);
+  drawSigBlock('Manager', `${managerSig}\n${fmtDate(ts.managerSignedDate)}`, managerSigImg, 95, y);
+
+  // Footer
+  const pageCount = doc.internal.getNumberOfPages();
+  for(let i=1;i<=pageCount;i++){
+    doc.setPage(i);
+    doc.setFontSize(7); doc.setTextColor(150,150,145);
+    doc.text(`${CONFIG.ORG_NAME} · Timesheet · Generated ${today()} · Page ${i}/${pageCount}`, W/2, 290, {align:'center'});
+  }
+
+  if (CONFIG.DEMO_MODE) {
+    doc.save(`timesheet-${ts.year}-${String(ts.month).padStart(2,'0')}-${user.userID}.pdf`);
+    return;
+  }
+
+  const pdfBlob = doc.output('blob');
+  const filename = `${ts.year}-${String(ts.month).padStart(2,'0')}-${user.userID}.pdf`;
+  try {
+    const path = await SP.uploadPDF(filename, pdfBlob);
+    ts.pdfPath = path;
+    await saveData('timesheets');
+    notify('PDF generated and uploaded.');
+  } catch(e) {
+    notify('PDF generated but upload failed: ' + e.message, 'amber');
+    doc.save(filename);
+  }
+}
+
+async function regeneratePDF(timesheetID) {
+  notify('Generating PDF…','info');
+  await generateAndUploadPDF(timesheetID);
+}
+
+// ---- APPROVALS (Manager) ----
+function renderApprovals() {
+  const role = STATE.currentUser.role;
+  const pending = STATE.data.timesheets.filter(ts => {
+    if(ts.status !== 'submitted') return false;
+    if(role === 'manager') return ts.managerID === STATE.currentUser.userID || getUser(ts.userID).managerID === STATE.currentUser.userID;
+    if(role === 'admin') return true;
+    return false;
+  });
+
+  const rows = pending.length ? pending.map(ts => {
+    const u = getUser(ts.userID);
+    const entries = getTimesheetEntries(ts.timesheetID);
+    const total = entries.reduce((s,e)=>s+Number(e.hours),0);
+    return `<tr>
+      <td>${u.displayName||'—'}</td>
+      <td class="text-mono">${fmtMonthYear(ts.month,ts.year)}</td>
+      <td class="text-mono">${fmtDate(ts.submittedDate)}</td>
+      <td class="text-mono">${total}h</td>
+      <td>
+        <div class="gap-row">
+          <button class="btn btn-secondary btn-sm" onclick="openTimesheetDetail('${ts.timesheetID}')">${ico('list',13)} Review</button>
+          <button class="btn btn-primary btn-sm" onclick="approveFromList('${ts.timesheetID}')">${ico('check',13)} Approve</button>
+          <button class="btn btn-danger btn-sm" onclick="rejectTimesheet('${ts.timesheetID}','approvals-list')">${ico('x',13)} Reject</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="5"><div class="empty-state">No timesheets pending approval.</div></td></tr>';
+
+  document.getElementById('page-approvals').innerHTML = `
+    <div class="card" id="approvals-list">
+      <div class="card-header"><h2>Pending Approvals <span style="font-family:var(--mono);color:var(--text3);font-size:12px;margin-left:8px;">${pending.length}</span></h2></div>
+      <div class="table-wrap">
+        <table><thead><tr><th>Team Member</th><th>Period</th><th>Submitted</th><th>Hours</th><th>Actions</th></tr></thead>
+        <tbody>${rows}</tbody></table>
+      </div>
+    </div>`;
+}
+
+async function approveFromList(timesheetID) {
+  await approveTimesheet(timesheetID, 'approvals-list');
+  renderApprovals();
+}
+
+// ---- TEAM OVERVIEW ----
+function renderTeamOverview() {
+  const role = STATE.currentUser.role;
+  const team = STATE.data.users.filter(u => {
+    if(role==='admin') return u.status==='active';
+    return u.managerID === STATE.currentUser.userID && u.status==='active';
+  });
+  const now = new Date();
+  const month = now.getMonth()+1, year = now.getFullYear();
+
+  const rows = team.map(u => {
+    const ts = STATE.data.timesheets.find(t=>t.userID===u.userID&&t.month===month&&t.year===year);
+    const entries = ts ? getTimesheetEntries(ts.timesheetID) : [];
+    const total = entries.reduce((s,e)=>s+Number(e.hours),0);
+    return `<tr>
+      <td>${u.displayName}</td>
+      <td>${ts ? getBadge(ts.status) : getBadge('draft')}</td>
+      <td class="text-mono">${total}h</td>
+      <td>${ts ? fmtDate(ts.submittedDate) : '—'}</td>
+      <td>${ts ? `<button class="btn btn-secondary btn-sm" onclick="openTimesheetDetail('${ts.timesheetID}')">${ico('list',13)} View</button>` : '—'}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('page-teamoverview').innerHTML = `
+    <div class="card">
+      <div class="card-header"><h2>Team — ${fmtMonthYear(month,year)}</h2></div>
+      <div class="table-wrap">
+        <table><thead><tr><th>Name</th><th>Status</th><th>Hours</th><th>Submitted</th><th></th></tr></thead>
+        <tbody>${rows||'<tr><td colspan="5"><div class="empty-state">No team members found.</div></td></tr>'}</tbody></table>
+      </div>
+    </div>`;
+}
+
+// ---- PROJECTS ----
+function renderProjects() {
+  const projs = STATE.data.projects;
+  document.getElementById('page-projects').innerHTML = `
+    <div class="gap-row mb-24">
+      <button class="btn btn-primary" onclick="openProjectForm()">${ico('plus',13)} New Project</button>
+    </div>
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Billing</th><th>Status</th><th>Dates</th><th></th></tr></thead>
+          <tbody>
+            ${projs.map(p=>`<tr>
+              <td><strong>${p.name}</strong><br><span style="color:var(--text2);font-size:12px;">${p.description||''}</span></td>
+              <td>${billableBadge(p.billable)}</td>
+              <td>${getBadge(p.status)}</td>
+              <td class="text-mono" style="font-size:12px;">${fmtDate(p.startDate)} → ${fmtDate(p.endDate)}</td>
+              <td>
+                <div class="gap-row">
+                  <button class="btn btn-secondary btn-sm" onclick="openProjectForm('${p.projectID}')">${ico('edit',13)}</button>
+                  <button class="btn btn-secondary btn-sm" onclick="toggleProjectStatus('${p.projectID}')">${p.status==='active'?ico('lock',13):ico('unlock',13)}</button>
+                </div>
+              </td>
+            </tr>`).join('')||'<tr><td colspan="5"><div class="empty-state">No projects. Create one to get started.</div></td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+async function openProjectForm(id) {
+  const p = id ? STATE.data.projects.find(x=>x.projectID===id) : null;
+  const html = `
+    <div class="form-grid">
+      <div class="form-group" style="grid-column:1/-1;"><label>Project name</label><input type="text" id="pf-name" value="${p?.name||''}" placeholder="e.g. Client Alpha Website"></div>
+      <div class="form-group" style="grid-column:1/-1;"><label>Description</label><textarea id="pf-desc">${p?.description||''}</textarea></div>
+      <div class="form-group"><label>Billable</label>
+        <select id="pf-billable">
+          <option value="true" ${p?.billable?'selected':''}>Yes — Billable</option>
+          <option value="false" ${p&&!p.billable?'selected':''}>No — Non-billable</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Status</label>
+        <select id="pf-status">
+          <option value="active" ${!p||p.status==='active'?'selected':''}>Active</option>
+          <option value="inactive" ${p?.status==='inactive'?'selected':''}>Inactive</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Start date</label><input type="date" id="pf-start" value="${p?.startDate||''}"></div>
+      <div class="form-group"><label>End date</label><input type="date" id="pf-end" value="${p?.endDate||''}"></div>
+    </div>`;
+
+  const ok = await openModal(p ? 'Edit Project' : 'New Project', html,
+    `<button class="btn btn-secondary" onclick="closeModal(false)">Cancel</button>
+     <button class="btn btn-primary" onclick="closeModal(true)">Save</button>`);
+  if (!ok) return;
+
+  const proj = {
+    projectID: p?.projectID || 'p'+uid(),
+    name: document.getElementById('pf-name').value,
+    description: document.getElementById('pf-desc').value,
+    billable: document.getElementById('pf-billable').value === 'true',
+    status: document.getElementById('pf-status').value,
+    startDate: document.getElementById('pf-start').value,
+    endDate: document.getElementById('pf-end').value
+  };
+  if (!proj.name.trim()) { notify('Project name is required.','amber'); return; }
+  if (p) Object.assign(p, proj);
+  else STATE.data.projects.push(proj);
+  await saveData('projects');
+  notify(p ? 'Project updated.' : 'Project created.');
+  renderProjects();
+}
+
+async function toggleProjectStatus(id) {
+  const p = STATE.data.projects.find(x=>x.projectID===id);
+  if (!p) return;
+  p.status = p.status==='active' ? 'inactive' : 'active';
+  await saveData('projects');
+  renderProjects();
+}
+
+// ---- TASKS ----
+function renderTasks() {
+  document.getElementById('page-tasks').innerHTML = `
+    <div class="gap-row mb-24">
+      <button class="btn btn-primary" onclick="openTaskForm()">${ico('plus',13)} New Task</button>
+    </div>
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Project</th><th>Task</th><th>Status</th><th>Assigned to</th><th></th></tr></thead>
+          <tbody>
+            ${STATE.data.tasks.map(t => {
+              const p = getProject(t.projectID);
+              const assigned = STATE.data.assignments.filter(a=>a.taskID===t.taskID).map(a=>getUser(a.userID).displayName).filter(Boolean);
+              return `<tr>
+                <td>${p.name||'—'} ${billableBadge(p.billable)}</td>
+                <td><strong>${t.name}</strong><br><span style="font-size:12px;color:var(--text2);">${t.description||''}</span></td>
+                <td>${getBadge(t.status)}</td>
+                <td style="font-size:12px;">${assigned.join(', ')||'—'}</td>
+                <td>
+                  <div class="gap-row">
+                    <button class="btn btn-secondary btn-sm" onclick="openTaskForm('${t.taskID}')">${ico('edit',13)}</button>
+                    <button class="btn btn-secondary btn-sm" onclick="openAssignForm('${t.taskID}')">${ico('users',13)}</button>
+                  </div>
+                </td>
+              </tr>`;
+            }).join('')||'<tr><td colspan="5"><div class="empty-state">No tasks yet.</div></td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+async function openTaskForm(id) {
+  const t = id ? STATE.data.tasks.find(x=>x.taskID===id) : null;
+  const projOpts = STATE.data.projects.filter(p=>p.status==='active').map(p=>
+    `<option value="${p.projectID}" ${t?.projectID===p.projectID?'selected':''}>${p.name}</option>`).join('');
+  const html = `
+    <div class="form-grid">
+      <div class="form-group" style="grid-column:1/-1;"><label>Project</label><select id="tf-project">${projOpts}</select></div>
+      <div class="form-group" style="grid-column:1/-1;"><label>Task name</label><input type="text" id="tf-name" value="${t?.name||''}" placeholder="e.g. Design"></div>
+      <div class="form-group" style="grid-column:1/-1;"><label>Description</label><textarea id="tf-desc">${t?.description||''}</textarea></div>
+      <div class="form-group"><label>Status</label>
+        <select id="tf-status">
+          <option value="active" ${!t||t.status==='active'?'selected':''}>Active</option>
+          <option value="inactive" ${t?.status==='inactive'?'selected':''}>Inactive</option>
+        </select>
+      </div>
+    </div>`;
+  const ok = await openModal(t?'Edit Task':'New Task', html,
+    `<button class="btn btn-secondary" onclick="closeModal(false)">Cancel</button>
+     <button class="btn btn-primary" onclick="closeModal(true)">Save</button>`);
+  if (!ok) return;
+  const task = {
+    taskID: t?.taskID||'t'+uid(),
+    projectID: document.getElementById('tf-project').value,
+    name: document.getElementById('tf-name').value,
+    description: document.getElementById('tf-desc').value,
+    status: document.getElementById('tf-status').value
+  };
+  if(!task.name.trim()||!task.projectID) { notify('Project and task name are required.','amber'); return; }
+  if(t) Object.assign(t,task); else STATE.data.tasks.push(task);
+  await saveData('tasks');
+  notify(t?'Task updated.':'Task created.');
+  renderTasks();
+}
+
+async function openAssignForm(taskID) {
+  const t = getTask(taskID);
+  const p = getProject(t.projectID);
+  const activeUsers = STATE.data.users.filter(u=>u.status==='active'&&u.role==='member');
+  const currentAssigned = STATE.data.assignments.filter(a=>a.taskID===taskID).map(a=>a.userID);
+
+  const html = `
+    <p style="margin-bottom:12px;font-size:13px;"><strong>${p.name}</strong> — ${t.name}</p>
+    <div class="form-group">
+      <label>Assign to team members</label>
+      ${activeUsers.map(u=>`
+        <label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:13px;font-weight:400;">
+          <input type="checkbox" value="${u.userID}" ${currentAssigned.includes(u.userID)?'checked':''} style="width:16px;height:16px;">
+          ${u.displayName} ${getBadge(u.status)}
+        </label>`).join('')}
+    </div>`;
+
+  const ok = await openModal('Assign Task', html,
+    `<button class="btn btn-secondary" onclick="closeModal(false)">Cancel</button>
+     <button class="btn btn-primary" onclick="closeModal(true)">Save assignments</button>`);
+  if (!ok) return;
+
+  const checked = [...document.querySelectorAll('#modal-body input[type=checkbox]:checked')].map(c=>c.value);
+  // Remove old assignments for this task
+  STATE.data.assignments = STATE.data.assignments.filter(a=>a.taskID!==taskID);
+  // Add new
+  checked.forEach(uid => STATE.data.assignments.push({ assignmentID:'a'+uid(), taskID, projectID:t.projectID, userID:uid }));
+  await saveData('assignments');
+  notify('Assignments updated.');
+  renderTasks();
+}
+
+// ---- USERS ----
+function renderUsers() {
+  document.getElementById('page-users').innerHTML = `
+    <div class="gap-row mb-24">
+      <button class="btn btn-primary" onclick="openUserForm()">${ico('plus',13)} New User</button>
+    </div>
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Manager</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            ${STATE.data.users.map(u=>`<tr>
+              <td><strong>${u.displayName}</strong></td>
+              <td style="font-size:12px;color:var(--text2);">${u.email||'—'}</td>
+              <td>${getBadge(u.role)}</td>
+              <td style="font-size:12px;">${getUser(u.managerID).displayName||'—'}</td>
+              <td>${getBadge(u.status)}</td>
+              <td>
+                <div class="gap-row">
+                  <button class="btn btn-secondary btn-sm" onclick="openUserForm('${u.userID}')">${ico('edit',13)}</button>
+                  <button class="btn btn-secondary btn-sm" onclick="impersonateUser('${u.userID}')" title="Impersonate">${ico('impersonate',13)}</button>
+                </div>
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+async function openUserForm(id) {
+  const u = id ? STATE.data.users.find(x=>x.userID===id) : null;
+  const managers = STATE.data.users.filter(x=>x.role==='manager'||x.role==='admin');
+  const managerOpts = `<option value="">— none —</option>` + managers.map(m=>
+    `<option value="${m.userID}" ${u?.managerID===m.userID?'selected':''}>${m.displayName}</option>`).join('');
+
+  const html = `
+    <div class="form-grid">
+      <div class="form-group" style="grid-column:1/-1;"><label>Full name</label><input type="text" id="uf-name" value="${u?.displayName||''}"></div>
+      <div class="form-group" style="grid-column:1/-1;"><label>Email (SharePoint login email)</label><input type="email" id="uf-email" value="${u?.email||''}"></div>
+      <div class="form-group"><label>Role</label>
+        <select id="uf-role">
+          <option value="member" ${u?.role==='member'?'selected':''}>Team Member</option>
+          <option value="manager" ${u?.role==='manager'?'selected':''}>Manager</option>
+          <option value="admin" ${u?.role==='admin'?'selected':''}>Administrator</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Manager</label><select id="uf-manager">${managerOpts}</select></div>
+      <div class="form-group"><label>Status</label>
+        <select id="uf-status">
+          <option value="active" ${!u||u.status==='active'?'selected':''}>Active</option>
+          <option value="inactive" ${u?.status==='inactive'?'selected':''}>Inactive</option>
+        </select>
+      </div>
+    </div>`;
+
+  const ok = await openModal(u?'Edit User':'New User', html,
+    `<button class="btn btn-secondary" onclick="closeModal(false)">Cancel</button>
+     <button class="btn btn-primary" onclick="closeModal(true)">Save</button>`);
+  if (!ok) return;
+
+  const usr = {
+    userID: u?.userID||'u'+uid(),
+    displayName: document.getElementById('uf-name').value,
+    email: document.getElementById('uf-email').value.toLowerCase().trim(),
+    role: document.getElementById('uf-role').value,
+    managerID: document.getElementById('uf-manager').value,
+    status: document.getElementById('uf-status').value
+  };
+  if(!usr.displayName.trim()) { notify('Name is required.','amber'); return; }
+  if(u) Object.assign(u,usr); else STATE.data.users.push(usr);
+  await saveData('users');
+  notify(u?'User updated.':'User created.');
+  renderUsers();
+}
+
+function impersonateUser(userID) {
+  const u = STATE.data.users.find(x=>x.userID===userID);
+  if (!u) return;
+  STATE.impersonating = u;
+  document.getElementById('impersonate-name').textContent = u.displayName;
+  document.getElementById('impersonate-banner').classList.add('visible');
+  notify(`Now acting as ${u.displayName}.`,'info');
+  navigateTo('dashboard','Dashboard');
+}
+
+function exitImpersonation() {
+  STATE.impersonating = null;
+  document.getElementById('impersonate-banner').classList.remove('visible');
+  notify('Exited impersonation.');
+  navigateTo('dashboard','Dashboard');
+}
+
+// ---- ALL TIMESHEETS ----
+function renderAllTimesheets() {
+  const all = [...STATE.data.timesheets].sort((a,b)=>b.year-a.year||b.month-a.month);
+  document.getElementById('page-alltimesheets').innerHTML = `
+    <div class="card">
+      <div class="card-header">
+        <h2>All Timesheets</h2>
+        <div class="gap-row">
+          <select id="ats-filter-status" onchange="renderAllTimesheets()" style="font-size:12px;padding:5px 8px;">
+            <option value="">All statuses</option>
+            ${['draft','submitted','approved','rejected','membersigned','fullysigned','reopened'].map(s=>`<option value="${s}">${s}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Member</th><th>Period</th><th>Status</th><th>Submitted</th><th>Approved</th><th>Reopens</th><th></th></tr></thead>
+          <tbody>
+            ${all.filter(ts => {
+              const f = document.getElementById('ats-filter-status')?.value;
+              return !f || ts.status===f;
+            }).map(ts=>{
+              const u = getUser(ts.userID);
+              return `<tr>
+                <td>${u.displayName||'—'} ${u.status==='inactive'?'<span style="font-size:10px;color:var(--text3);">(inactive)</span>':''}</td>
+                <td class="text-mono">${fmtMonthYear(ts.month,ts.year)}</td>
+                <td>${getBadge(ts.status)}</td>
+                <td class="text-mono" style="font-size:12px;">${fmtDate(ts.submittedDate)}</td>
+                <td class="text-mono" style="font-size:12px;">${fmtDate(ts.approvedDate)}</td>
+                <td class="text-mono" style="font-size:12px;">${ts.reopenCount||0}</td>
+                <td>
+                  <div class="gap-row">
+                    <button class="btn btn-secondary btn-sm" onclick="openTimesheetDetail('${ts.timesheetID}')">${ico('list',13)} View</button>
+                    ${['approved','membersigned','fullysigned'].includes(ts.status)?`<button class="btn btn-amber btn-sm" onclick="reopenTimesheet('${ts.timesheetID}','page-alltimesheets')">${ico('unlock',13)}</button>`:''}
+                  </div>
+                </td>
+              </tr>`;
+            }).join('')||'<tr><td colspan="7"><div class="empty-state">No timesheets found.</div></td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+// ---- AUDIT LOG ----
+function renderAuditLog() {
+  const logs = [...STATE.data.auditlog].reverse();
+  document.getElementById('page-auditlog').innerHTML = `
+    <div class="card">
+      <div class="card-header"><h2>Audit Log <span style="font-size:11px;color:var(--text3);font-family:var(--mono);">${logs.length} events</span></h2></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Timestamp</th><th>Action</th><th>Acting User</th><th>Target User</th><th>Timesheet</th><th>Transition</th><th>Notes</th></tr></thead>
+          <tbody>
+            ${logs.map(l => {
+              const ts = STATE.data.timesheets.find(t=>t.timesheetID===l.timesheetID);
+              const u = getUser(ts?.userID||'');
+              return `<tr>
+                <td class="text-mono" style="font-size:11px;">${l.timestamp.replace('T',' ').slice(0,19)}</td>
+                <td><span class="badge badge-draft">${l.action}</span></td>
+                <td style="font-size:12px;">${getUser(l.actingUserID).displayName||l.actingUserID}</td>
+                <td style="font-size:12px;">${getUser(l.targetUserID).displayName||l.targetUserID}</td>
+                <td style="font-size:12px;">${u.displayName||'—'} ${ts?fmtMonthYear(ts.month,ts.year):''}</td>
+                <td style="font-size:11px;color:var(--text2);">${l.previousStatus||'—'} → ${l.newStatus||'—'}</td>
+                <td style="font-size:12px;color:var(--text2);">${l.notes||'—'}</td>
+              </tr>`;
+            }).join('')||'<tr><td colspan="7"><div class="empty-state">No audit events yet.</div></td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+// ---- SETTINGS ----
+function renderSettings() {
+  document.getElementById('page-settings').innerHTML = `
+    <div class="card" style="max-width:500px;">
+      <div class="card-header"><h2>Settings</h2></div>
+      <div class="card-body">
+        <div class="form-group mb-16">
+          <label>Organization name</label>
+          <input type="text" id="s-org" value="${CONFIG.ORG_NAME}">
+        </div>
+        <div class="form-group mb-16">
+          <label>SharePoint site URL</label>
+          <input type="text" id="s-sp" value="${CONFIG.SP_SITE_URL}">
+          <small style="color:var(--text3);font-size:11px;">e.g. https://gaiaxes.sharepoint.com/sites/AsociacinGAIA-XEspaa</small>
+        </div>
+        <div class="form-group mb-16">
+          <label>Data library name</label>
+          <input type="text" id="s-lib" value="${CONFIG.DATA_LIB}">
+        </div>
+        <div class="alert alert-amber">${ico('alert',13)} Settings changes take effect on next page reload. They are saved to localStorage for this browser only.</div>
+        <div class="form-actions">
+          <button class="btn btn-primary" onclick="saveSettings()">Save settings</button>
+          <button class="btn btn-secondary" onclick="exportData()">Export all data (JSON)</button>
+        </div>
+        ${CONFIG.DEMO_MODE ? '<div class="alert alert-info" style="margin-top:16px;">'+ico('alert',13)+' <strong>Demo mode</strong> — running outside SharePoint. Data is in-memory only.</div>' : ''}
+      </div>
+    </div>`;
+}
+
+function saveSettings() {
+  CONFIG.ORG_NAME = document.getElementById('s-org').value;
+  CONFIG.SP_SITE_URL = document.getElementById('s-sp').value;
+  CONFIG.DATA_LIB = document.getElementById('s-lib').value;
+  localStorage.setItem('ts_config', JSON.stringify({ ORG_NAME: CONFIG.ORG_NAME, SP_SITE_URL: CONFIG.SP_SITE_URL, DATA_LIB: CONFIG.DATA_LIB }));
+  document.getElementById('org-name-display').textContent = CONFIG.ORG_NAME;
+  notify('Settings saved. Reload to apply SharePoint URL changes.');
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(STATE.data, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'timesheet-export-' + today() + '.json';
+  a.click();
+}
+
+// ============================================================
+// INIT
+// ============================================================
+async function init() {
+  document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+
+  // Load saved config
+  try {
+    const saved = JSON.parse(localStorage.getItem('ts_config')||'{}');
+    Object.assign(CONFIG, saved);
+  } catch {}
+  document.getElementById('org-name-display').textContent = CONFIG.ORG_NAME;
+
+  try {
+    // Get SharePoint current user
+    STATE.spUser = await SP.getCurrentUser();
+
+    // Load all data
+    await loadAllData();
+
+    // Match user
+    const email = STATE.spUser.Email?.toLowerCase().trim();
+    STATE.currentUser = STATE.data.users.find(u => u.email?.toLowerCase().trim() === email);
+
+    if (!STATE.currentUser) {
+      document.getElementById('loading-screen').innerHTML = `
+        <div style="text-align:center;max-width:400px;padding:32px;">
+          <div style="font-size:32px;margin-bottom:16px;">🔒</div>
+          <h2 style="font-size:18px;margin-bottom:8px;">Access not configured</h2>
+          <p style="color:var(--text2);font-size:13px;">Your account (<strong>${STATE.spUser.Email}</strong>) is not registered in the timesheet system.</p>
+          <p style="color:var(--text2);font-size:13px;margin-top:8px;">Please contact your Administrator to be added.</p>
+        </div>`;
+      return;
+    }
+
+    if (STATE.currentUser.status === 'inactive') {
+      document.getElementById('loading-screen').innerHTML = `
+        <div style="text-align:center;max-width:400px;padding:32px;">
+          <div style="font-size:32px;margin-bottom:16px;">⛔</div>
+          <h2 style="font-size:18px;margin-bottom:8px;">Account inactive</h2>
+          <p style="color:var(--text2);font-size:13px;">Your account has been deactivated. Contact your Administrator.</p>
+        </div>`;
+      return;
+    }
+
+    // Build UI
+    document.getElementById('sidebar-username').textContent = STATE.currentUser.displayName;
+    document.getElementById('sidebar-userrole').textContent = STATE.currentUser.role;
+    document.getElementById('sidebar-role-label').textContent = STATE.currentUser.role.toUpperCase();
+    buildNav();
+
+    document.getElementById('loading-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+
+    navigateTo('dashboard','Dashboard');
+
+  } catch(err) {
+    document.getElementById('loading-screen').innerHTML = `
+      <div style="text-align:center;max-width:400px;padding:32px;">
+        <div style="font-size:32px;margin-bottom:16px;">⚠️</div>
+        <h2 style="font-size:18px;margin-bottom:8px;">Could not load</h2>
+        <p style="color:var(--text2);font-size:13px;">${err.message}</p>
+        <button class="btn btn-primary" style="margin-top:16px;" onclick="init()">Retry</button>
+      </div>`;
+  }
+}
+
+init();
+</script>
+</body>
+</html>
